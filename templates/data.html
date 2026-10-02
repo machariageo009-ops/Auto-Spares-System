@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Data{% endblock %}
+{% block content %}
+<h1>Data</h1>
+<div class="row" style="margin-bottom:12px"><a class="btn" href="{{ url_for('export_excel') }}">Download Excel backup</a></div>
+<div class="card"><form method="get"><label>Data view</label><select name="query" onchange="this.form.submit()">{% for key,item in queries.items() %}<option value="{{ key }}" {% if selected==key %}selected{% endif %}>{{ item['title'] }}</option>{% endfor %}</select></form></div>
+<div class="card"><div class="tw"><table>{% if columns %}<tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr>{% for row in rows %}<tr>{% for c in columns %}<td>{{ row[c] }}</td>{% endfor %}</tr>{% else %}<tr><td class="empty">No data.</td></tr>{% endif %}</table></div></div>
+{% endblock %}

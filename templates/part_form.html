@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if part else 'Add' }} part{% endblock %}
+{% block content %}
+{% macro fld(label, name, type='text', val='', req=false, step='') %}
+<label>{{ label }}</label>
+<input type="{{ type }}" name="{{ name }}" value="{{ val }}" {% if req %}required{% endif %} {% if step %}step="{{ step }}"{% endif %}>
+{% endmacro %}
+<h1>{{ 'Edit spare part' if part else 'Add spare part' }}</h1>
+<form method="post" class="card">
+  {{ fld('Part name', 'name', 'text', part['name'] if part else '', true) }}
+  <div class="two">
+    <div>{{ fld('Category', 'category', 'text', part['category'] if part else '') }}</div>
+    <div>{{ fld('Brand', 'brand', 'text', part['brand'] if part else '') }}</div>
+  </div>
+  <div class="two">
+    <div>{{ fld('Engine', 'engine', 'text', part['engine'] if part else '') }}</div>
+    <div>{{ fld('Specification', 'specification', 'text', part['specification'] if part else '') }}</div>
+  </div>
+  <div class="two">
+    <div>{{ fld('Buying price (KSh)', 'buying_price', 'number', part['buying_price'] if part else '', false, 'any') }}</div>
+    <div>{{ fld('Selling price (KSh)', 'selling_price', 'number', part['selling_price'] if part else '', false, 'any') }}</div>
+  </div>
+  <div class="two">
+    <div>{{ fld('Stock quantity', 'stock_quantity', 'number', part['stock_quantity'] if part else 0) }}</div>
+    <div>{{ fld('Low stock level', 'low_stock_level', 'number', part['low_stock_level'] if part else 5) }}</div>
+  </div>
+  {% if part %}{{ fld('Reason for price change (optional)', 'price_reason') }}{% endif %}
+  <div class="row" style="margin-top:16px">
+    <button class="btn">Save</button>
+    <a class="btn sec" href="{{ url_for('inventory') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

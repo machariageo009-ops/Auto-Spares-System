@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h1>Reports</h1>
+<form method="get" class="card">
+  <label>Period</label>
+  <select name="preset" onchange="this.form.submit()">
+    {% for value,label in [('all','All sales'),('today','Today'),('yesterday','Yesterday'),('this_week','This week'),('last_week','Last week'),('this_month','This month'),('last_month','Last month')] %}
+    <option value="{{ value }}" {% if preset==value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <div class="two"><div><label>From date</label><input type="date" name="start_date" value="{{ start_date }}"></div><div><label>To date</label><input type="date" name="end_date" value="{{ end_date }}"></div></div>
+  <button class="btn" style="margin-top:12px">View report</button>
+</form>
+<div class="grid"><div class="stat hl"><small>Total sales</small><b>KSh {{ '{:,.0f}'.format(total_sales) }}</b></div><div class="stat"><small>Total profit</small><b>KSh {{ '{:,.0f}'.format(total_profit) }}</b></div><div class="stat"><small>Transactions</small><b>{{ total_transactions }}</b></div></div>
+<div class="card"><h2>Daily sales</h2><div class="tw"><table><tr><th>Date</th><th class="r">Sales</th><th class="r">Profit</th><th class="r">Transactions</th></tr>{% for r in daily %}<tr><td>{{ r['day'] }}</td><td class="r">KSh {{ '{:,.0f}'.format(r['sales']) }}</td><td class="r">KSh {{ '{:,.0f}'.format(r['profit']) }}</td><td class="r">{{ r['transactions'] }}</td></tr>{% else %}<tr><td colspan="4" class="empty">No sales for this period.</td></tr>{% endfor %}</table></div></div>
+<div class="card"><h2>Monthly summary</h2><div class="tw"><table><tr><th>Month</th><th class="r">Sales</th><th class="r">Profit</th></tr>{% for r in monthly %}<tr><td>{{ r['month'] }}</td><td class="r">KSh {{ '{:,.0f}'.format(r['sales']) }}</td><td class="r">KSh {{ '{:,.0f}'.format(r['profit']) }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No sales for this period.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

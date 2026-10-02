@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Supplier{% endblock %}
+{% block content %}
+{% macro fld(label, name, val='', type='text', req=false) %}
+<label>{{ label }}</label><input type="{{ type }}" name="{{ name }}" value="{{ val }}" {% if req %}required{% endif %}>
+{% endmacro %}
+<h1>{{ 'Edit supplier' if supplier else 'Add supplier' }}</h1>
+<form method="post" class="card">
+  {{ fld('Name', 'name', supplier['name'] if supplier else '', 'text', true) }}
+  {{ fld('Phone', 'phone', supplier['phone'] if supplier else '', 'tel', true) }}
+  {{ fld('Company', 'company', supplier['company'] if supplier else '') }}
+  {{ fld('Parts supplied', 'parts_supplied', supplier['parts_supplied'] if supplier else '') }}
+  {{ fld('Location', 'location', supplier['location'] if supplier else '') }}
+  {{ fld('Email', 'email', supplier['email'] if supplier else '') }}
+  {{ fld('Notes', 'notes', supplier['notes'] if supplier else '') }}
+  <div class="row" style="margin-top:16px">
+    <button class="btn">Save</button>
+    <a class="btn sec" href="{{ url_for('suppliers') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

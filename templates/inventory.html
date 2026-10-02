@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+<h1>Inventory</h1>
+<form method="get" class="row" style="margin-bottom:12px">
+  <input name="search" value="{{ search }}" placeholder="Search name, brand, engine..." style="flex:1">
+  <button class="btn">Search</button>
+  <a class="btn sec" href="{{ url_for('add_part') }}">+ Add</a>
+</form>
+<div class="card">
+{% if parts %}
+<div class="tw"><table>
+  <tr><th>Part</th><th>Engine / Spec</th><th class="r">Buy</th><th class="r">Sell</th><th class="r">Stock</th><th></th></tr>
+  {% for p in parts %}
+  <tr>
+    <td><b>{{ p['name'] }}</b><br><span class="mute">{{ p['category'] }} {{ p['brand'] }}</span></td>
+    <td>{{ p['engine'] }}<br><span class="mute">{{ p['specification'] }}</span></td>
+    <td class="r">{{ '{:,.0f}'.format(p['buying_price']) }}</td>
+    <td class="r">{{ '{:,.0f}'.format(p['selling_price']) }}</td>
+    <td class="r"><span class="badge {{ 'bad' if p['stock_quantity'] <= p['low_stock_level'] else 'ok' }}">{{ p['stock_quantity'] }}</span></td>
+    <td class="row" style="flex-wrap:nowrap">
+      <a class="btn sec sm" href="{{ url_for('edit_part', part_id=p['id']) }}">Edit</a>
+      <a class="btn sec sm" href="{{ url_for('price_history', part_id=p['id']) }}">Prices</a>
+      <form method="post" action="{{ url_for('delete_part', part_id=p['id']) }}" onsubmit="return confirm('Delete this part?')">
+        <button class="btn bad sm">Del</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<div class="empty">No parts found.</div>{% endif %}
+</div>
+{% endblock %}

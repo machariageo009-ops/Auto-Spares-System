@@ -1,0 +1,10 @@
+{
+  "name":"Auto Spares Management System",
+  "short_name":"Auto Spares",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#f5f7f9",
+  "theme_color":"#0f766e",
+  "description":"Stock, sales, suppliers and reports for an auto spare parts shop.",
+  "icons":[]
+}

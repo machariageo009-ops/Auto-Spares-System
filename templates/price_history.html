@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Price history{% endblock %}
+{% block content %}
+<h1>Price history</h1>
+<div class="card">
+  <h2>{{ part['name'] }} <span class="mute">{{ part['engine'] }}</span></h2>
+  <p>Current selling price: <b>KSh {{ '{:,.0f}'.format(part['selling_price']) }}</b></p>
+  {% if history %}
+  <div class="tw"><table>
+    <tr><th>Date</th><th class="r">Old</th><th class="r">New</th><th>Reason</th></tr>
+    {% for h in history %}
+    <tr><td>{{ h['changed_at']|dt }}</td>
+    <td class="r">{{ '{:,.0f}'.format(h['old_price']) if h['old_price'] is not none else '-' }}</td>
+    <td class="r">{{ '{:,.0f}'.format(h['new_price']) }}</td><td>{{ h['reason'] }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<div class="empty">No changes recorded.</div>{% endif %}
+</div>
+<a class="btn sec" href="{{ url_for('inventory') }}">Back</a>
+{% endblock %}
