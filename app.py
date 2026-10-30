@@ -28,7 +28,17 @@ ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret-key")
+SECRET_KEY_FILE = Path("/etc/secrets/secret_key.txt")
+
+if SECRET_KEY_FILE.exists():
+    app.secret_key = SECRET_KEY_FILE.read_text(encoding="utf-8").strip()
+else:
+    app.secret_key = os.environ.get("SECRET_KEY")
+
+if not app.secret_key:
+    if os.environ.get("DATABASE_URL"):
+        raise RuntimeError("SECRET_KEY is missing from Render.")
+    app.secret_key = "change-this-secret-key"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 if os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("FLY_APP_NAME"):
