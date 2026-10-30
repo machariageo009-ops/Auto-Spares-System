@@ -1,42 +1,49 @@
 # Auto Spare Parts Management System
 
-One shop system for stock, sales, suppliers, price history, and reports. Use it on this computer, or host it so phones and other computers can open it while this laptop is off.
+An auto spare parts management system for tracking stock, sales,
+suppliers, expenses, price history and daily profits.
 
-## What it does
+## Features
 
-- Dashboard with stock, sales, profit, and low-stock alerts
-- Inventory with engine / vehicle and specification (so similar parts stay distinct)
-- Selling-price history
-- Sales with the actual unit price charged
-- Supplier contacts
-- Reports by day, week, month, or a date range
-- Excel backup and restore
-- Clean phone layout with an Install App button (PWA)
+- Dashboard with stock, sales, profit and low-stock alerts.
+- Inventory management with vehicle and engine specifications.
+- Selling-price history.
+- Sales recording with actual unit prices.
+- Supplier contact management.
+- Reports by day, week, month or custom date range.
+- Excel backup and restore.
+- Mobile-friendly interface.
+- Progressive Web App (PWA) installation support.
 
-## Run on this computer
+## Installation and Usage
 
-1. Install [Python 3](https://python.org/downloads/). Tick **Add Python to PATH**.
-2. Double-click `start.bat`.
-3. Open `http://127.0.0.1:5000`
+1. Install Python 3 from https://python.org/downloads/.
+2. Ensure Python is added to PATH.
+3. Double-click `start.bat`.
+4. Open http://127.0.0.1:5000 in your browser.
 
-Optional: copy `.env.example` to `.env` and set `APP_PASSWORD`.
+## Database
 
-Shop data on this computer is saved in `instance/auto_spares.db`.
+The application uses SQLite for local storage.
 
-## Use from any phone or computer (laptop can be off)
+Database location:
 
-The program must run on a host, not only on GitHub. GitHub stores the code. Render (or similar) keeps the website open.
+`instance/auto_spares.db`
 
-1. Create a free PostgreSQL database at [Neon](https://neon.tech) and copy the connection string (`DATABASE_URL`).
-2. Push this folder to GitHub (GitHub Desktop → publish this repository).
-3. On [Render](https://render.com), create a **Web Service**, connect that GitHub repo, and set:
-   - `APP_PASSWORD` — the shop sign-in password
-   - `DATABASE_URL` — the Neon connection string
-   - `PUBLIC_URL` — the `https://....onrender.com` address Render gives you (add this after the first deploy)
-4. Open that `https://` address on any phone or computer. From the Dashboard, use **Download / Install App** to add it to the phone home screen. On iPhone, use Safari → Share → Add to Home Screen.
+## Online Deployment
 
-Free Render services sleep after inactivity. The first open after a rest can take about a minute. Data stays in Neon, not on this laptop.
+The application can be hosted online using:
 
-After it is live, download Excel from **Data / SQL** so you always have an offline copy.
-# Auto-Spares-System
-An auto spare parts management system for tracking stock, sales, expenses and daily profits.
+- GitHub for source code management.
+- Neon for PostgreSQL database hosting.
+- Render for web application hosting.
+
+This allows users to access the application from phones
+and other computers without keeping the local laptop running.
+
+## Project
+
+**Name:** Auto-Spare Parts Management System
+
+**Purpose:** To simplify spare parts inventory, sales,
+supplier management and business reporting.
