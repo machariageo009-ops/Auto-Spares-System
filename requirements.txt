@@ -2,3 +2,4 @@ Flask
 gunicorn
 openpyxl
 python-dotenv
+psycopg2-binary
