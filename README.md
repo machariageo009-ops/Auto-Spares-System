@@ -38,3 +38,5 @@ The program must run on a host, not only on GitHub. GitHub stores the code. Rend
 Free Render services sleep after inactivity. The first open after a rest can take about a minute. Data stays in Neon, not on this laptop.
 
 After it is live, download Excel from **Data / SQL** so you always have an offline copy.
+# Auto-Spares-System
+An auto spare parts management system for tracking stock, sales, expenses and daily profits.
