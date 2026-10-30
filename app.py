@@ -2,10 +2,18 @@ from flask import (
     Flask, render_template, request, redirect, url_for, flash,
     send_from_directory, send_file, session
 )
+
 import os
+import secrets
+import hashlib
+import smtplib
+
+from email.message import EmailMessage
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from data_export import build_excel, rows_from_excel
 from db import DATABASE, SCHEMA_FILE, get_db, init_db, is_hosted, using_postgres
@@ -64,8 +72,42 @@ ORDER BY price_history.id DESC;"""
 }
 
 
-def password_required():
-    return bool(os.environ.get("APP_PASSWORD"))
+def admin_exists():
+    conn = get_db()
+    try:
+        result = conn.execute(
+            "SELECT COUNT(*) AS total FROM admin_users"
+        ).fetchone()
+        return result["total"] > 0
+    finally:
+        conn.close()
+
+
+def send_reset_email(email, reset_url):
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    mail_from = os.environ.get("MAIL_FROM", smtp_user)
+
+    if not all([smtp_host, smtp_user, smtp_password, mail_from]):
+        raise RuntimeError("Email settings are not configured.")
+
+    message = EmailMessage()
+    message["Subject"] = "Auto Spares System - Password Reset"
+    message["From"] = mail_from
+    message["To"] = email
+    message.set_content(
+        "You requested a password reset for your Auto Spares account.\n\n"
+        f"Use this link to reset your password:\n{reset_url}\n\n"
+        "If you did not request this, ignore this email.\n"
+        "This link expires after 30 minutes."
+    )
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(message)
 
 
 init_db()
@@ -75,7 +117,7 @@ init_db()
 def inject_globals():
     return {
         "now": datetime.now(),
-        "auth_on": password_required(),
+        "auth_on": admin_exists(),
         "is_hosted": is_hosted(),
         "using_postgres": using_postgres()
     }
@@ -91,13 +133,20 @@ def format_dt(value):
 
 @app.before_request
 def require_login():
-    if not password_required():
-        return None
-    allowed = {"login", "static", "service_worker", "healthz"}
+    allowed = {
+        "login", "setup", "forgot_password", "reset_password",
+        "static", "service_worker", "healthz"
+    }
+
     if request.endpoint in allowed:
         return None
-    if session.get("logged_in"):
+
+    if not admin_exists():
+        return redirect(url_for("setup"))
+
+    if session.get("admin_id"):
         return None
+
     return redirect(url_for("login"))
 
 
@@ -106,22 +155,206 @@ def healthz():
     return "ok", 200
 
 
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    if admin_exists():
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not all([full_name, username, email, password, confirm_password]):
+            flash("Please complete all fields.", "danger")
+            return render_template("setup.html")
+
+        if password != confirm_password:
+            flash("Passwords do not match.", "danger")
+            return render_template("setup.html")
+
+        if len(password) < 8:
+            flash("Password must contain at least 8 characters.", "danger")
+            return render_template("setup.html")
+
+        conn = get_db()
+        try:
+            password_hash = generate_password_hash(password)
+            conn.insert(
+                """INSERT INTO admin_users
+                   (full_name, username, email, password_hash, role, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    full_name,
+                    username,
+                    email,
+                    password_hash,
+                    "admin",
+                    datetime.now().isoformat()
+                )
+            )
+            conn.commit()
+        except Exception:
+            conn.close()
+            app.logger.exception("Administrator account creation failed.")
+            flash(
+                "Account creation failed. The username or email may already be in use.",
+                "danger"
+            )
+            return render_template("setup.html")
+
+        conn.close()
+        flash("Administrator account created successfully. Please log in.", "success")
+        return redirect(url_for("login"))
+
+    return render_template("setup.html")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if not password_required():
+    if not admin_exists():
+        return redirect(url_for("setup"))
+
+    if session.get("admin_id"):
         return redirect(url_for("dashboard"))
+
     if request.method == "POST":
-        if request.form.get("password") == os.environ.get("APP_PASSWORD"):
-            session["logged_in"] = True
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        conn = get_db()
+        try:
+            admin = conn.execute(
+                "SELECT * FROM admin_users WHERE username=?",
+                (username,)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if admin and check_password_hash(admin["password_hash"], password):
+            session.clear()
+            session["admin_id"] = admin["id"]
+            session["admin_name"] = admin["full_name"]
             return redirect(url_for("dashboard"))
-        flash("Wrong password.", "danger")
+
+        flash("Incorrect username or password.", "danger")
+
     return render_template("login.html")
 
 
 @app.post("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("login") if password_required() else url_for("dashboard"))
+    return redirect(url_for("login"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if not admin_exists():
+        return redirect(url_for("setup"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        conn = get_db()
+
+        try:
+            admin = conn.execute(
+                "SELECT * FROM admin_users WHERE email=?",
+                (email,)
+            ).fetchone()
+
+            if admin:
+                token = secrets.token_urlsafe(32)
+                token_hash = hashlib.sha256(token.encode()).hexdigest()
+                created_at = datetime.now()
+                expires_at = created_at + timedelta(minutes=30)
+
+                conn.insert(
+                    """INSERT INTO password_reset_tokens
+                       (user_id, token_hash, expires_at, used, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        admin["id"],
+                        token_hash,
+                        expires_at.isoformat(),
+                        0,
+                        created_at.isoformat()
+                    )
+                )
+                conn.commit()
+
+                reset_url = url_for(
+                    "reset_password",
+                    token=token,
+                    _external=True
+                )
+
+                try:
+                    send_reset_email(email, reset_url)
+                except Exception:
+                    app.logger.exception("Could not send password reset email.")
+        finally:
+            conn.close()
+
+        flash(
+            "If an account exists with that email, password reset instructions will be sent.",
+            "info"
+        )
+
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    conn = get_db()
+
+    try:
+        reset_record = conn.execute(
+            """SELECT * FROM password_reset_tokens
+               WHERE token_hash=? AND used=0""",
+            (token_hash,)
+        ).fetchone()
+
+        if not reset_record:
+            flash("This password reset link is invalid or has already been used.", "danger")
+            return redirect(url_for("login"))
+
+        if datetime.fromisoformat(reset_record["expires_at"]) < datetime.now():
+            flash("This password reset link has expired.", "danger")
+            return redirect(url_for("forgot_password"))
+
+        if request.method == "POST":
+            password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
+
+            if len(password) < 8:
+                flash("Password must contain at least 8 characters.", "danger")
+                return render_template("reset_password.html", token=token)
+
+            if password != confirm_password:
+                flash("Passwords do not match.", "danger")
+                return render_template("reset_password.html", token=token)
+
+            new_hash = generate_password_hash(password)
+            conn.execute(
+                "UPDATE admin_users SET password_hash=? WHERE id=?",
+                (new_hash, reset_record["user_id"])
+            )
+            conn.execute(
+                "UPDATE password_reset_tokens SET used=1 WHERE id=?",
+                (reset_record["id"],)
+            )
+            conn.commit()
+
+            flash("Your password has been reset. You can now log in.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("reset_password.html", token=token)
+    finally:
+        conn.close()
 
 
 @app.after_request

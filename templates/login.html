@@ -1,1 +1,143 @@
-{% extends "base.html" %}{% block title %}Sign in{% endblock %}{% block content %}<div class="login card"><h1>🔧 Auto Spares</h1><p class="mute">Sign in to continue.</p><form method="post"><label>Password</label><input type="password" name="password" required autofocus><button class="btn" style="width:100%;margin-top:14px">Sign in</button></form></div>{% endblock %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Auto Spares System</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f4f7;
+            margin: 0;
+            padding: 0;
+        }
+
+        .login-container {
+            width: 350px;
+            max-width: calc(100% - 60px);
+            margin: 60px auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+        }
+
+        .login-logo {
+            display: block;
+            width: 130px;
+            height: 130px;
+            object-fit: contain;
+            margin: 0 auto 15px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #16324f;
+        }
+
+        p {
+            text-align: center;
+            color: #666;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 6px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 22px;
+            background-color: #16324f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #244d70;
+        }
+
+        .message {
+            color: #c0392b;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .forgot-link {
+            display: block;
+            text-align: center;
+            margin-top: 18px;
+            color: #16324f;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="login-container">
+
+        <img
+            src="{{ url_for('static', filename='auto-spares-icon.png') }}"
+            alt="Auto Spares Logo"
+            class="login-logo"
+        >
+
+        <h1>Auto Spares System</h1>
+        <p>Administrator Login</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="message">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+
+            <label for="username">Username</label>
+            <input
+                type="text"
+                id="username"
+                name="username"
+                placeholder="Enter your username"
+                required
+            >
+
+            <label for="password">Password</label>
+            <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder="Enter your password"
+                required
+            >
+
+            <button type="submit">Login</button>
+
+        </form>
+
+        <a class="forgot-link" href="{{ url_for('forgot_password') }}">
+            Forgot your password?
+        </a>
+
+    </div>
+
+</body>
+</html>

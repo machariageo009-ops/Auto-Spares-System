@@ -1,1 +1,212 @@
-{% extends "base.html" %}{% block title %}Dashboard{% endblock %}{% block content %}<h1>Dashboard</h1><div class="grid"><div class="stat hl"><small>Sales today</small><b>KSh {{ '{:,.0f}'.format(sales_today) }}</b></div><div class="stat"><small>Sales this month</small><b>KSh {{ '{:,.0f}'.format(monthly_sales) }}</b></div><div class="stat"><small>Profit this month</small><b>KSh {{ '{:,.0f}'.format(monthly_profit) }}</b></div><div class="stat"><small>Items in stock</small><b>{{ total_items }}</b></div><div class="stat"><small>Suppliers</small><b>{{ supplier_count }}</b></div></div><div class="card install-card" id="installCard"><div><strong>📱 Use Auto Spares on your phone</strong><p>Install it on your home screen for quick access like an app.</p></div><button class="btn install-btn" id="installApp" type="button">Download / Install App</button></div><div class="row" style="margin-bottom:14px"><a class="btn" href="{{ url_for('sales') }}">New sale</a><a class="btn sec" href="{{ url_for('add_part') }}">Add part</a></div><div class="card"><h2>⚠️ Low stock ({{ low_stock|length }})</h2>{% if low_stock %}<div class="tw"><table><tr><th>Part</th><th>Engine</th><th class="r">Left</th></tr>{% for p in low_stock %}<tr><td><a href="{{ url_for('edit_part',part_id=p['id']) }}">{{ p['name'] }}</a></td><td>{{ p['engine'] }}</td><td class="r"><span class="badge bad">{{ p['stock_quantity'] }}</span></td></tr>{% endfor %}</table></div>{% else %}<div class="empty">All stock levels are fine.</div>{% endif %}</div><div class="card"><h2>Recent sales</h2>{% if recent_sales %}<div class="tw"><table><tr><th>Date</th><th>Part</th><th class="r">Qty</th><th class="r">Total</th></tr>{% for s in recent_sales %}<tr><td>{{ s['sale_date']|dt }}</td><td>{{ s['part_name'] }}</td><td class="r">{{ s['quantity'] }}</td><td class="r">{{ '{:,.0f}'.format(s['total_amount']) }}</td></tr>{% endfor %}</table></div>{% else %}<div class="empty">No sales yet.</div>{% endif %}</div>{% endblock %}
+
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Auto Spares{% endblock %}
+
+{% block content %}
+
+<style>
+    .dashboard {
+        max-width: 1200px;
+        margin: auto;
+    }
+
+    .dashboard-header {
+        margin-bottom: 25px;
+    }
+
+    .dashboard-header h1 {
+        color: #16324f;
+        margin-bottom: 8px;
+    }
+
+    .dashboard-header p {
+        color: #667085;
+    }
+
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 18px;
+        margin-bottom: 28px;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #16324f, #477ba8);
+        color: white;
+        padding: 24px;
+        border-radius: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    .stat-card h3 {
+        font-size: 15px;
+        font-weight: normal;
+        margin-bottom: 12px;
+    }
+
+    .stat-card p {
+        font-size: 25px;
+        font-weight: bold;
+    }
+
+    .dashboard-section {
+        background: white;
+        padding: 22px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+
+    .dashboard-section h2 {
+        color: #16324f;
+        margin-bottom: 18px;
+        font-size: 20px;
+    }
+
+    .dashboard-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .dashboard-table th,
+    .dashboard-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .dashboard-table th {
+        color: #16324f;
+        background: #f2f4f7;
+    }
+
+    .empty-message {
+        color: #667085;
+    }
+
+    @media (max-width: 600px) {
+        .dashboard-section {
+            overflow-x: auto;
+        }
+
+        .dashboard-table {
+            min-width: 500px;
+        }
+    }
+</style>
+
+<div class="dashboard">
+
+    <div class="dashboard-header">
+        <h1>Dashboard</h1>
+        <p>Welcome to your Auto Spares Management System.</p>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-container">
+
+        <div class="stat-card">
+            <h3>Total Stock Items</h3>
+            <p>{{ total_items or 0 }}</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Sales Today</h3>
+            <p>KSh {{ "{:,.2f}".format(sales_today or 0) }}</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Monthly Sales</h3>
+            <p>KSh {{ "{:,.2f}".format(monthly_sales or 0) }}</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Monthly Profit</h3>
+            <p>KSh {{ "{:,.2f}".format(monthly_profit or 0) }}</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Total Suppliers</h3>
+            <p>{{ supplier_count or 0 }}</p>
+        </div>
+
+    </div>
+
+    <!-- Low Stock -->
+    <section class="dashboard-section">
+
+        <h2>Low Stock Items</h2>
+
+        {% if low_stock %}
+
+        <table class="dashboard-table">
+            <thead>
+                <tr>
+                    <th>Part Name</th>
+                    <th>Category</th>
+                    <th>Current Stock</th>
+                    <th>Minimum Stock</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for part in low_stock %}
+                <tr>
+                    <td>{{ part.name }}</td>
+                    <td>{{ part.category }}</td>
+                    <td>{{ part.stock_quantity }}</td>
+                    <td>{{ part.low_stock_level }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% else %}
+
+        <p class="empty-message">There are currently no low-stock items.</p>
+
+        {% endif %}
+
+    </section>
+
+    <!-- Recent Sales -->
+    <section class="dashboard-section">
+
+        <h2>Recent Sales</h2>
+
+        {% if recent_sales %}
+
+        <table class="dashboard-table">
+            <thead>
+                <tr>
+                    <th>Part</th>
+                    <th>Quantity</th>
+                    <th>Total Amount</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for sale in recent_sales %}
+                <tr>
+                    <td>{{ sale.part_name }}</td>
+                    <td>{{ sale.quantity }}</td>
+                    <td>KSh {{ "{:,.2f}".format(sale.total_amount or 0) }}</td>
+                    <td>{{ sale.sale_date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% else %}
+
+        <p class="empty-message">No sales have been recorded yet.</p>
+
+        {% endif %}
+
+    </section>
+
+</div>
+
+{% endblock %}
