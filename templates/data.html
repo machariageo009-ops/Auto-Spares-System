@@ -1,8 +1,70 @@
 {% extends "base.html" %}
 {% block title %}Data{% endblock %}
+
 {% block content %}
 <h1>Data</h1>
-<div class="row" style="margin-bottom:12px"><a class="btn" href="{{ url_for('export_excel') }}">Download Excel backup</a></div>
-<div class="card"><form method="get"><label>Data view</label><select name="query" onchange="this.form.submit()">{% for key,item in queries.items() %}<option value="{{ key }}" {% if selected==key %}selected{% endif %}>{{ item['title'] }}</option>{% endfor %}</select></form></div>
-<div class="card"><div class="tw"><table>{% if columns %}<tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr>{% for row in rows %}<tr>{% for c in columns %}<td>{{ row[c] }}</td>{% endfor %}</tr>{% endfor %}{% else %}<tr><td class="empty">No data.</td></tr>{% endif %}</table></div></div>
+
+<div class="row" style="margin-bottom:12px; gap:10px; flex-wrap:wrap">
+    <a class="btn" href="{{ url_for('export_excel') }}">Download Excel backup</a>
+</div>
+
+<div class="card">
+    <form method="get">
+        <label for="query">Select data to view</label>
+        <select name="query" id="query">
+            {% for key, item in queries.items() %}
+            <option value="{{ key }}" {% if selected == key %}selected{% endif %}>
+                {{ item['title'] }}
+            </option>
+            {% endfor %}
+        </select>
+
+        {% if selected != 'low_stock' %}
+        <div class="two" style="margin-top:12px">
+            <div>
+                <label for="start_date">From date</label>
+                <input type="date" id="start_date" name="start_date" value="{{ start_date }}">
+            </div>
+            <div>
+                <label for="end_date">To date</label>
+                <input type="date" id="end_date" name="end_date" value="{{ end_date }}">
+            </div>
+        </div>
+        <p class="mute">The date filter applies to the date recorded for the selected data type.</p>
+        {% else %}
+        <p class="mute">Low-stock records are based on current stock levels, so date filters do not apply.</p>
+        {% endif %}
+
+        <div class="row" style="margin-top:14px; gap:8px; flex-wrap:wrap">
+            <button class="btn" type="submit">View data</button>
+            <a class="btn" href="{{ url_for('data', query=selected) }}">Clear filters</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>{{ queries[selected]['title'] }}</h2>
+    <div class="tw">
+        <table>
+            {% if columns %}
+            <tr>
+                {% for column in columns %}
+                <th>{{ column.replace('_', ' ')|title }}</th>
+                {% endfor %}
+            </tr>
+            {% for row in rows %}
+            <tr>
+                {% for column in columns %}
+                <td>{{ row[column] }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr><td class="empty">No data found for the selected filters.</td></tr>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<p class="mute">Database: {{ database_file }}</p>
 {% endblock %}

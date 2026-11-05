@@ -1,4 +1,3 @@
-
 import os
 import sqlite3
 from pathlib import Path
@@ -9,7 +8,6 @@ INSTANCE = ROOT / "instance"
 INSTANCE.mkdir(exist_ok=True)
 
 SCHEMA_FILE = ROOT / "schema.sql"
-
 LEGACY_DATABASE = ROOT / "auto_spares.db"
 
 DATABASE = Path(
@@ -84,6 +82,19 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     used INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS stock_purchases (
+    id SERIAL PRIMARY KEY,
+    part_id INTEGER NOT NULL REFERENCES parts(id),
+    supplier_name TEXT NOT NULL,
+    supplier_phone TEXT,
+    quantity INTEGER NOT NULL,
+    unit_cost DOUBLE PRECISION NOT NULL,
+    total_cost DOUBLE PRECISION NOT NULL,
+    purchase_date TEXT NOT NULL,
+    reference TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -111,7 +122,6 @@ def is_hosted():
 
 
 class Row(dict):
-
     def __getattr__(self, key):
         try:
             return self[key]
@@ -120,7 +130,6 @@ class Row(dict):
 
 
 def wrap_row(row):
-
     if row is None:
         return None
 
@@ -131,7 +140,6 @@ def wrap_row(row):
         cleaned = {}
 
         for key, value in row.items():
-
             if (
                 hasattr(value, "as_tuple")
                 and not isinstance(
@@ -149,7 +157,6 @@ def wrap_row(row):
 
 
 class Cursor:
-
     def __init__(self, cur):
         self.cur = cur
 
@@ -168,7 +175,6 @@ class Cursor:
 
 
 class Connection:
-
     def __init__(self, raw, postgres):
         self.raw = raw
         self.postgres = postgres
@@ -182,16 +188,13 @@ class Connection:
         return Cursor(cur)
 
     def insert(self, sql, params=()):
-
         sql = sql.strip().rstrip(";")
 
         if self.postgres:
-
             if "RETURNING" not in sql.upper():
                 sql += " RETURNING id"
 
             row = self.execute(sql, params).fetchone()
-
             return row["id"] if row else None
 
         return self.execute(sql, params).lastrowid
@@ -204,11 +207,9 @@ class Connection:
 
 
 def get_db():
-
     url = database_url()
 
     if url:
-
         import psycopg2
         from psycopg2.extras import RealDictCursor
 
@@ -223,16 +224,13 @@ def get_db():
         LEGACY_DATABASE.replace(DATABASE)
 
     raw = sqlite3.connect(DATABASE)
-
     raw.row_factory = sqlite3.Row
-
     raw.execute("PRAGMA foreign_keys = ON")
 
     return Connection(raw, False)
 
 
 def _sqlite_columns(conn, table):
-
     return {
         row["name"]
         for row in conn.execute(
@@ -242,11 +240,9 @@ def _sqlite_columns(conn, table):
 
 
 def init_db():
-
     conn = get_db()
 
     if conn.postgres:
-
         statements = [
             item.strip()
             for item in PG_SCHEMA.split(";")
@@ -257,7 +253,6 @@ def init_db():
             conn.execute(statement)
 
     else:
-
         conn.raw.executescript(
             SCHEMA_FILE.read_text(encoding="utf-8")
         )
@@ -282,7 +277,6 @@ def init_db():
         }
 
         if "price_history" not in tables:
-
             conn.execute("""
                 CREATE TABLE price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -297,7 +291,6 @@ def init_db():
                 )
             """)
 
-        # Administrator account table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS admin_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -310,7 +303,6 @@ def init_db():
             )
         """)
 
-        # Password reset tokens table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -322,6 +314,23 @@ def init_db():
                 FOREIGN KEY (user_id)
                     REFERENCES admin_users(id)
                     ON DELETE CASCADE
+            )
+        """)
+
+        # Add stock purchase records without deleting existing shop data.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS stock_purchases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                part_id INTEGER NOT NULL,
+                supplier_name TEXT NOT NULL,
+                supplier_phone TEXT,
+                quantity INTEGER NOT NULL,
+                unit_cost REAL NOT NULL,
+                total_cost REAL NOT NULL,
+                purchase_date TEXT NOT NULL,
+                reference TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (part_id) REFERENCES parts(id)
             )
         """)
 

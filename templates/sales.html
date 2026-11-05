@@ -1,38 +1,113 @@
 {% extends "base.html" %}
 {% block title %}Sales{% endblock %}
+
 {% block content %}
 <h1>Record a sale</h1>
+
 <form method="post" class="card">
-  <label>Part</label>
-  <select name="part_id" id="part" required>
-    {% for p in parts %}
-    <option value="{{ p['id'] }}" data-price="{{ p['selling_price'] }}">{{ p['name'] }} {{ p['engine'] }} {{ p['specification'] }} (stock {{ p['stock_quantity'] }})</option>
-    {% endfor %}
-  </select>
-  <div class="two">
-    <div><label>Quantity</label><input type="number" name="quantity" min="1" value="1" required></div>
-    <div><label>Unit price (KSh)</label><input type="number" name="unit_price" id="price" step="any" min="0"></div>
-  </div>
-  <div style="margin-top:16px"><button class="btn">Record sale</button></div>
+    <label for="part-search">Search for a product</label>
+    <input
+        type="search"
+        id="part-search"
+        placeholder="Type product name, engine or specification..."
+        autocomplete="off"
+    >
+
+    <label for="part">Part</label>
+    <select name="part_id" id="part" required>
+        {% for p in parts %}
+        <option
+            value="{{ p['id'] }}"
+            data-price="{{ p['selling_price'] }}"
+            data-search="{{ (p['name'] ~ ' ' ~ (p['engine'] or '') ~ ' ' ~ (p['specification'] or '') ~ ' ' ~ (p['brand'] or '') ~ ' ' ~ (p['category'] or ''))|lower }}"
+        >
+            {{ p['name'] }} {{ p['engine'] or '' }} {{ p['specification'] or '' }}
+            (stock {{ p['stock_quantity'] }})
+        </option>
+        {% endfor %}
+    </select>
+
+    <div class="two">
+        <div>
+            <label>Quantity</label>
+            <input type="number" name="quantity" min="1" value="1" required>
+        </div>
+        <div>
+            <label>Unit price (KSh)</label>
+            <input type="number" name="unit_price" id="price" step="any" min="0" required>
+        </div>
+    </div>
+
+    <div style="margin-top:16px">
+        <button class="btn">Record sale</button>
+    </div>
 </form>
+
 <div class="card">
-  <h2>Latest sales</h2>
-  {% if history %}
-  <div class="tw"><table>
-    <tr><th>Date</th><th>Part</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Total</th><th class="r">Profit</th></tr>
-    {% for s in history %}
-    <tr><td>{{ s['sale_date']|dt }}</td><td>{{ s['part_name'] }}<br><span class="mute">{{ s['engine'] }}</span></td>
-    <td class="r">{{ s['quantity'] }}</td><td class="r">{{ '{:,.0f}'.format(s['unit_price']) }}</td>
-    <td class="r">{{ '{:,.0f}'.format(s['total_amount']) }}</td><td class="r">{{ '{:,.0f}'.format(s['profit']) }}</td></tr>
-    {% endfor %}
-  </table></div>
-  {% else %}<div class="empty">No sales yet.</div>{% endif %}
+    <h2>Latest sales</h2>
+    {% if history %}
+    <div class="tw">
+        <table>
+            <tr>
+                <th>Date</th><th>Part</th><th class="r">Qty</th>
+                <th class="r">Price</th><th class="r">Total</th><th class="r">Profit</th>
+            </tr>
+            {% for s in history %}
+            <tr>
+                <td>{{ s['sale_date']|dt }}</td>
+                <td>{{ s['part_name'] }}<br><span class="mute">{{ s['engine'] or '' }}</span></td>
+                <td class="r">{{ s['quantity'] }}</td>
+                <td class="r">{{ '{:,.0f}'.format(s['unit_price']) }}</td>
+                <td class="r">{{ '{:,.0f}'.format(s['total_amount']) }}</td>
+                <td class="r">{{ '{:,.0f}'.format(s['profit']) }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% else %}
+    <div class="empty">No sales yet.</div>
+    {% endif %}
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script>
-var sel=document.getElementById('part'),pr=document.getElementById('price');
-function fill(){var o=sel.options[sel.selectedIndex];if(o)pr.value=o.getAttribute('data-price');}
-if(sel){sel.addEventListener('change',fill);fill();}
+(function () {
+    const search = document.getElementById("part-search");
+    const select = document.getElementById("part");
+    const price = document.getElementById("price");
+
+    if (!search || !select || !price) return;
+
+    const options = Array.from(select.options);
+
+    function fillPrice() {
+        const option = select.options[select.selectedIndex];
+        if (option) price.value = option.dataset.price || "";
+    }
+
+    function filterParts() {
+        const term = search.value.trim().toLocaleLowerCase();
+        let firstVisible = null;
+
+        options.forEach(function (option) {
+            const searchable = (option.dataset.search || option.textContent).toLocaleLowerCase();
+            const matches = searchable.includes(term);
+            option.hidden = !matches;
+            if (matches && !firstVisible) firstVisible = option;
+        });
+
+        if (firstVisible) {
+            if (select.selectedOptions.length === 0 || select.selectedOptions[0].hidden) {
+                firstVisible.selected = true;
+            }
+            fillPrice();
+        }
+    }
+
+    search.addEventListener("input", filterParts);
+    select.addEventListener("change", fillPrice);
+    fillPrice();
+})();
 </script>
 {% endblock %}

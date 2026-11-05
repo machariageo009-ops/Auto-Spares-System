@@ -1,6 +1,6 @@
 -- Auto Spare Parts Management System
--- SQLite schema. Live shop data is stored in instance/auto_spares.db
--- On a cloud host, the same tables are created in PostgreSQL via DATABASE_URL.
+-- SQLite schema. Existing shop data remains in instance/auto_spares.db.
+-- On a cloud host, equivalent tables are created in PostgreSQL via DATABASE_URL.
 
 CREATE TABLE IF NOT EXISTS parts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,4 +47,38 @@ CREATE TABLE IF NOT EXISTS price_history (
     reason TEXT,
     changed_at TEXT NOT NULL,
     FOREIGN KEY (part_id) REFERENCES parts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'admin',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS stock_purchases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    part_id INTEGER NOT NULL,
+    supplier_name TEXT NOT NULL,
+    supplier_phone TEXT,
+    quantity INTEGER NOT NULL,
+    unit_cost REAL NOT NULL,
+    total_cost REAL NOT NULL,
+    purchase_date TEXT NOT NULL,
+    reference TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (part_id) REFERENCES parts(id)
 );

@@ -47,11 +47,13 @@ if os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.envir
 SQL_QUERIES = {
     "parts": {
         "title": "All spare parts",
-        "sql": "SELECT * FROM parts ORDER BY name;"
+        "sql": "SELECT * FROM parts ORDER BY name;",
+        "date_column": "created_at",
     },
     "suppliers": {
         "title": "All suppliers",
-        "sql": "SELECT * FROM suppliers ORDER BY name;"
+        "sql": "SELECT * FROM suppliers ORDER BY name;",
+        "date_column": "created_at",
     },
     "sales": {
         "title": "Sales with part names",
@@ -60,7 +62,8 @@ SQL_QUERIES = {
        sales.quantity, sales.unit_price, sales.total_amount, sales.profit
 FROM sales
 JOIN parts ON parts.id = sales.part_id
-ORDER BY sales.id DESC;"""
+ORDER BY sales.id DESC;""",
+        "date_column": "sales.sale_date",
     },
     "low_stock": {
         "title": "Low stock",
@@ -68,7 +71,8 @@ ORDER BY sales.id DESC;"""
        stock_quantity, low_stock_level
 FROM parts
 WHERE stock_quantity <= low_stock_level
-ORDER BY stock_quantity;"""
+ORDER BY stock_quantity;""",
+        "date_column": None,
     },
     "price_history": {
         "title": "Price history",
@@ -77,8 +81,21 @@ ORDER BY stock_quantity;"""
        price_history.reason, price_history.changed_at
 FROM price_history
 JOIN parts ON parts.id = price_history.part_id
-ORDER BY price_history.id DESC;"""
-    }
+ORDER BY price_history.id DESC;""",
+        "date_column": "price_history.changed_at",
+    },
+    "stock_purchases": {
+        "title": "Stock purchases",
+        "sql": """SELECT stock_purchases.id, stock_purchases.purchase_date,
+       parts.name AS part_name, parts.engine, parts.specification,
+       stock_purchases.quantity, stock_purchases.unit_cost,
+       stock_purchases.total_cost, stock_purchases.supplier_name,
+       stock_purchases.supplier_phone, stock_purchases.reference
+FROM stock_purchases
+JOIN parts ON parts.id = stock_purchases.part_id
+ORDER BY stock_purchases.id DESC;""",
+        "date_column": "stock_purchases.purchase_date",
+    },
 }
 
 
@@ -874,9 +891,46 @@ def data():
     selected = request.args.get("query", "parts")
     if selected not in SQL_QUERIES:
         selected = "parts"
+
+    start_date = request.args.get("start_date", "").strip()
+    end_date = request.args.get("end_date", "").strip()
+
+    query_info = SQL_QUERIES[selected]
+    sql = query_info["sql"].rstrip(";")
+    params = []
+    date_column = query_info.get("date_column")
+
+    if date_column and (start_date or end_date):
+        conditions = []
+        if start_date:
+            conditions.append(f"substr({date_column}, 1, 10) >= ?")
+            params.append(start_date)
+        if end_date:
+            conditions.append(f"substr({date_column}, 1, 10) <= ?")
+            params.append(end_date)
+
+        # Add date conditions before ORDER BY. The selected queries above
+        # do not contain an existing WHERE clause except low_stock, which
+        # intentionally has no date filter.
+        order_index = sql.upper().rfind(" ORDER BY ")
+        if order_index >= 0:
+            main_sql = sql[:order_index]
+            order_sql = sql[order_index:]
+        else:
+            main_sql = sql
+            order_sql = ""
+
+        if " WHERE " in main_sql.upper():
+            sql = main_sql + " AND " + " AND ".join(conditions) + order_sql
+        else:
+            sql = main_sql + " WHERE " + " AND ".join(conditions) + order_sql
+
     conn = get_db()
-    rows = conn.execute(SQL_QUERIES[selected]["sql"]).fetchall()
-    conn.close()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+
     columns = list(rows[0].keys()) if rows else []
     return render_template(
         "data.html",
@@ -884,8 +938,104 @@ def data():
         selected=selected,
         rows=rows,
         columns=columns,
-        database_file="PostgreSQL" if using_postgres() else str(DATABASE)
+        start_date=start_date,
+        end_date=end_date,
+        database_file="PostgreSQL" if using_postgres() else str(DATABASE),
     )
+
+
+@app.route("/stock/add", methods=["GET", "POST"])
+def add_stock():
+    conn = get_db()
+
+    if request.method == "POST":
+        try:
+            part_id = int(request.form.get("part_id", ""))
+            quantity = int(request.form.get("quantity", ""))
+            unit_cost = float(request.form.get("unit_cost", ""))
+        except (TypeError, ValueError):
+            conn.close()
+            flash("Enter a valid product, quantity and buying price.", "danger")
+            return redirect(url_for("add_stock"))
+
+        purchase_date = request.form.get("purchase_date", "").strip()
+        supplier_id = request.form.get("supplier_id", "").strip()
+        supplier_name = request.form.get("supplier_name", "").strip()
+        supplier_phone = request.form.get("supplier_phone", "").strip()
+        reference = request.form.get("reference", "").strip()
+
+        if quantity <= 0 or unit_cost < 0:
+            conn.close()
+            flash("Quantity must be above zero and buying price cannot be negative.", "danger")
+            return redirect(url_for("add_stock"))
+
+        if not purchase_date:
+            conn.close()
+            flash("Please select the purchase date.", "danger")
+            return redirect(url_for("add_stock"))
+
+        part = conn.execute("SELECT * FROM parts WHERE id=?", (part_id,)).fetchone()
+        if not part:
+            conn.close()
+            flash("The selected product could not be found.", "danger")
+            return redirect(url_for("add_stock"))
+
+        if supplier_id:
+            supplier = conn.execute(
+                "SELECT * FROM suppliers WHERE id=?", (int(supplier_id),)
+            ).fetchone()
+            if supplier:
+                supplier_name = supplier["name"]
+                supplier_phone = supplier["phone"]
+
+        if not supplier_name:
+            conn.close()
+            flash("Enter a supplier name or select an existing supplier.", "danger")
+            return redirect(url_for("add_stock"))
+
+        total_cost = quantity * unit_cost
+        created_at = datetime.now().isoformat()
+
+        try:
+            conn.insert(
+                """INSERT INTO stock_purchases
+                   (part_id, supplier_name, supplier_phone, quantity, unit_cost,
+                    total_cost, purchase_date, reference, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (part_id, supplier_name, supplier_phone, quantity, unit_cost,
+                 total_cost, purchase_date, reference, created_at),
+            )
+            conn.execute(
+                """UPDATE parts
+                   SET stock_quantity = stock_quantity + ?, buying_price = ?
+                   WHERE id = ?""",
+                (quantity, unit_cost, part_id),
+            )
+            conn.commit()
+        except Exception:
+            conn.close()
+            app.logger.exception("Stock purchase could not be saved.")
+            flash("The stock purchase could not be saved. Please check the details.", "danger")
+            return redirect(url_for("add_stock"))
+
+        conn.close()
+        flash(
+            f"Stock added successfully: {quantity} unit(s) of {part['name']}. "
+            f"Total purchase cost: KSh {total_cost:,.2f}",
+            "success",
+        )
+        return redirect(url_for("data", query="stock_purchases"))
+
+    parts = conn.execute("SELECT * FROM parts ORDER BY name ASC").fetchall()
+    supplier_rows = conn.execute("SELECT * FROM suppliers ORDER BY name ASC").fetchall()
+    conn.close()
+    return render_template(
+        "stock_form.html",
+        parts=parts,
+        suppliers=supplier_rows,
+        today=datetime.now().strftime("%Y-%m-%d"),
+    )
+
 
 
 @app.route("/data/excel")
