@@ -613,15 +613,13 @@ def price_history(part_id):
 @app.route("/sales", methods=["GET", "POST"])
 def sales():
     conn = get_db()
-    parts = conn.execute(
-        "SELECT * FROM parts ORDER BY name ASC"
-    ).fetchall()
 
     if request.method == "POST":
         try:
-            part_id = int(request.form["part_id"])
-            quantity = int(request.form["quantity"])
-        except (ValueError, KeyError):
+            part_id = int(request.form.get("part_id", ""))
+            quantity = int(request.form.get("quantity", ""))
+            unit_price = float(request.form.get("unit_price", ""))
+        except (TypeError, ValueError):
             conn.close()
             flash("Enter valid sale details.", "danger")
             return redirect(url_for("sales"))
@@ -632,7 +630,7 @@ def sales():
 
         if not part:
             conn.close()
-            flash("Selected part does not exist.", "danger")
+            flash("Selected product does not exist.", "danger")
             return redirect(url_for("sales"))
 
         if quantity <= 0:
@@ -642,55 +640,224 @@ def sales():
 
         if quantity > part["stock_quantity"]:
             conn.close()
-            flash(f"Not enough stock. Available: {part['stock_quantity']}.", "danger")
-            return redirect(url_for("sales"))
-
-        try:
-            unit_price = float(
-                request.form.get("unit_price", part["selling_price"]) or part["selling_price"]
+            flash(
+                f"Not enough stock. Available: {part['stock_quantity']}.",
+                "danger"
             )
-        except ValueError:
-            conn.close()
-            flash("Enter a valid unit selling price.", "danger")
             return redirect(url_for("sales"))
 
         if unit_price < 0:
             conn.close()
-            flash("Unit selling price cannot be negative.", "danger")
+            flash("Selling price cannot be negative.", "danger")
             return redirect(url_for("sales"))
 
         total_amount = unit_price * quantity
         profit = (unit_price - part["buying_price"]) * quantity
 
-        conn.insert(
-            """INSERT INTO sales
-               (part_id, quantity, unit_price, total_amount, profit, sale_date)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (part_id, quantity, unit_price, total_amount, profit,
-             datetime.now().isoformat())
-        )
-        conn.execute(
-            "UPDATE parts SET stock_quantity=stock_quantity-? WHERE id=?",
-            (quantity, part_id)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.insert(
+                """INSERT INTO sales
+                   (part_id, quantity, unit_price, total_amount, profit, sale_date)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    part_id,
+                    quantity,
+                    unit_price,
+                    total_amount,
+                    profit,
+                    datetime.now().isoformat()
+                )
+            )
 
+            conn.execute(
+                "UPDATE parts SET stock_quantity=stock_quantity-? WHERE id=?",
+                (quantity, part_id)
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            conn.close()
+            app.logger.exception("Sale could not be recorded.")
+            flash("Sale could not be recorded. Please try again.", "danger")
+            return redirect(url_for("sales"))
+
+        conn.close()
         flash(
-            f"Sale recorded. Total: KSh {total_amount:,.2f}",
+            f"Sale recorded successfully. Total: KSh {total_amount:,.2f}",
             "success"
         )
         return redirect(url_for("sales"))
 
+    parts = conn.execute(
+        "SELECT * FROM parts ORDER BY name ASC"
+    ).fetchall()
+
     history = conn.execute(
         """SELECT sales.*, parts.name AS part_name,
                   parts.engine, parts.specification
-           FROM sales JOIN parts ON parts.id=sales.part_id
+           FROM sales
+           JOIN parts ON parts.id=sales.part_id
            ORDER BY sales.id DESC LIMIT 50"""
     ).fetchall()
-    conn.close()
 
+    conn.close()
     return render_template("sales.html", parts=parts, history=history)
+
+
+@app.route("/sales/edit/<int:sale_id>", methods=["GET", "POST"])
+def edit_sale(sale_id):
+    conn = get_db()
+
+    try:
+        sale = conn.execute(
+            "SELECT * FROM sales WHERE id=?", (sale_id,)
+        ).fetchone()
+
+        if not sale:
+            flash("Sale record not found.", "danger")
+            return redirect(url_for("sales"))
+
+        parts = conn.execute(
+            "SELECT * FROM parts ORDER BY name ASC"
+        ).fetchall()
+
+        if request.method == "POST":
+            try:
+                new_part_id = int(request.form.get("part_id", ""))
+                new_quantity = int(request.form.get("quantity", ""))
+                new_unit_price = float(request.form.get("unit_price", ""))
+                new_date = request.form.get("sale_date", "").strip()
+
+                if new_quantity <= 0:
+                    raise ValueError("Quantity must be greater than zero.")
+                if new_unit_price < 0:
+                    raise ValueError("Selling price cannot be negative.")
+                if not new_date:
+                    raise ValueError("Sale date is required.")
+
+                parsed_date = datetime.fromisoformat(new_date)
+
+            except (TypeError, ValueError):
+                flash("Enter valid sale details and date.", "danger")
+                return redirect(url_for("edit_sale", sale_id=sale_id))
+
+            new_part = conn.execute(
+                "SELECT * FROM parts WHERE id=?", (new_part_id,)
+            ).fetchone()
+
+            if not new_part:
+                flash("Selected product does not exist.", "danger")
+                return redirect(url_for("edit_sale", sale_id=sale_id))
+
+            old_part_id = sale["part_id"]
+            old_quantity = sale["quantity"]
+
+            available_stock = new_part["stock_quantity"]
+            if new_part_id == old_part_id:
+                available_stock += old_quantity
+
+            if new_quantity > available_stock:
+                flash(
+                    f"Not enough stock. Available: {available_stock}.",
+                    "danger"
+                )
+                return redirect(url_for("edit_sale", sale_id=sale_id))
+
+            total_amount = new_unit_price * new_quantity
+            profit = (new_unit_price - new_part["buying_price"]) * new_quantity
+
+            try:
+                # Restore the quantity from the original sale first.
+                conn.execute(
+                    """UPDATE parts
+                       SET stock_quantity=stock_quantity+?
+                       WHERE id=?""",
+                    (old_quantity, old_part_id)
+                )
+
+                # Deduct the revised quantity from the selected product.
+                conn.execute(
+                    """UPDATE parts
+                       SET stock_quantity=stock_quantity-?
+                       WHERE id=?""",
+                    (new_quantity, new_part_id)
+                )
+
+                conn.execute(
+                    """UPDATE sales
+                       SET part_id=?, quantity=?, unit_price=?,
+                           total_amount=?, profit=?, sale_date=?
+                       WHERE id=?""",
+                    (
+                        new_part_id,
+                        new_quantity,
+                        new_unit_price,
+                        total_amount,
+                        profit,
+                        parsed_date.isoformat(),
+                        sale_id
+                    )
+                )
+                conn.commit()
+
+            except Exception:
+                conn.rollback()
+                app.logger.exception("Sale update failed.")
+                flash("Sale could not be updated.", "danger")
+                return redirect(url_for("edit_sale", sale_id=sale_id))
+
+            flash("Sale updated successfully.", "success")
+            return redirect(url_for("sales"))
+
+        return render_template(
+            "edit_sale.html",
+            sale=sale,
+            parts=parts
+        )
+
+    except Exception:
+        app.logger.exception("Could not load or edit sale %s.", sale_id)
+        flash("Unable to open or update this sale.", "danger")
+        return redirect(url_for("sales"))
+
+    finally:
+        conn.close()
+
+
+@app.post("/sales/delete/<int:sale_id>")
+def delete_sale(sale_id):
+    conn = get_db()
+
+    try:
+        sale = conn.execute(
+            "SELECT * FROM sales WHERE id=?", (sale_id,)
+        ).fetchone()
+
+        if not sale:
+            flash("Sale record not found.", "danger")
+            return redirect(url_for("sales"))
+
+        conn.execute(
+            """UPDATE parts
+               SET stock_quantity=stock_quantity+?
+               WHERE id=?""",
+            (sale["quantity"], sale["part_id"])
+        )
+        conn.execute(
+            "DELETE FROM sales WHERE id=?", (sale_id,)
+        )
+        conn.commit()
+        flash("Sale deleted and stock restored successfully.", "success")
+
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Sale deletion failed.")
+        flash("Sale could not be deleted.", "danger")
+
+    finally:
+        conn.close()
+
+    return redirect(url_for("sales"))
 
 
 @app.route("/suppliers")
