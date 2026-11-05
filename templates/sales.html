@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}Sales{% endblock %}
 
@@ -32,6 +33,7 @@
             <label>Quantity</label>
             <input type="number" name="quantity" min="1" value="1" required>
         </div>
+
         <div>
             <label>Unit price (KSh)</label>
             <input type="number" name="unit_price" id="price" step="any" min="0" required>
@@ -45,29 +47,65 @@
 
 <div class="card">
     <h2>Latest sales</h2>
+
     {% if history %}
     <div class="tw">
         <table>
             <tr>
-                <th>Date</th><th>Part</th><th class="r">Qty</th>
-                <th class="r">Price</th><th class="r">Total</th><th class="r">Profit</th>
+                <th>Date</th>
+                <th>Part</th>
+                <th class="r">Qty</th>
+                <th class="r">Price</th>
+                <th class="r">Total</th>
+                <th class="r">Profit</th>
+                <th>Action</th>
             </tr>
+
             {% for s in history %}
             <tr>
                 <td>{{ s['sale_date']|dt }}</td>
-                <td>{{ s['part_name'] }}<br><span class="mute">{{ s['engine'] or '' }}</span></td>
+
+                <td>
+                    {{ s['part_name'] }}<br>
+                    <span class="mute">{{ s['engine'] or '' }}</span>
+                </td>
+
                 <td class="r">{{ s['quantity'] }}</td>
-                <td class="r">{{ '{:,.0f}'.format(s['unit_price']) }}</td>
-                <td class="r">{{ '{:,.0f}'.format(s['total_amount']) }}</td>
-                <td class="r">{{ '{:,.0f}'.format(s['profit']) }}</td>
+
+                <td class="r">
+                    {{ '{:,.0f}'.format(s['unit_price']) }}
+                </td>
+
+                <td class="r">
+                    {{ '{:,.0f}'.format(s['total_amount']) }}
+                </td>
+
+                <td class="r">
+                    {{ '{:,.0f}'.format(s['profit']) }}
+                </td>
+
+                <td>
+                    <form
+                        method="post"
+                        action="{{ url_for('delete_sale', sale_id=s['id']) }}"
+                        onsubmit="return confirm('Are you sure you want to delete this sale? The sold stock will be restored.')"
+                    >
+                        <button type="submit" class="btn bad sm">
+                            Delete
+                        </button>
+                    </form>
+                </td>
             </tr>
             {% endfor %}
+
         </table>
     </div>
+
     {% else %}
     <div class="empty">No sales yet.</div>
     {% endif %}
 </div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -87,26 +125,38 @@
     }
 
     function filterParts() {
-        const term = search.value.trim().toLocaleLowerCase();
+        const term = search.value.trim().toLowerCase();
         let firstVisible = null;
 
         options.forEach(function (option) {
-            const searchable = (option.dataset.search || option.textContent).toLocaleLowerCase();
+            const searchable = (
+                option.dataset.search || option.textContent
+            ).toLowerCase();
+
             const matches = searchable.includes(term);
+
             option.hidden = !matches;
-            if (matches && !firstVisible) firstVisible = option;
+
+            if (matches && !firstVisible) {
+                firstVisible = option;
+            }
         });
 
         if (firstVisible) {
-            if (select.selectedOptions.length === 0 || select.selectedOptions[0].hidden) {
+            if (
+                select.selectedOptions.length === 0 ||
+                select.selectedOptions[0].hidden
+            ) {
                 firstVisible.selected = true;
             }
+
             fillPrice();
         }
     }
 
     search.addEventListener("input", filterParts);
     select.addEventListener("change", fillPrice);
+
     fillPrice();
 })();
 </script>
